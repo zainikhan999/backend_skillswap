@@ -21,6 +21,7 @@ connectDB(MONGO_URI);
 const app = express(); //create express app
 const server = createServer(app); //create http server
 const io = new Server(server, {
+  origin: process.env.FRONTEND_URL,
   cors: corsOptions, //enable cors
 });
 app.use(cors(corsOptions)); //
