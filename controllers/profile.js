@@ -38,7 +38,7 @@ export const profile = TryCatch(async (req, res, next) => {
 });
 
 export const viewProfile = TryCatch(async (req, res, next) => {
-  const { username } = req.query; // Get username from query params
+  const { username } = req.query;
 
   if (!username) {
     return res.status(400).json({ message: "Username is required." });

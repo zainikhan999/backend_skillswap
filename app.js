@@ -41,49 +41,55 @@ io.on("connection", (socket) => {
   });
 
   socket.on("my-room", (userId) => {
-    // Join the user to their own room
-    socket.join(userId);
+    socket.data.userName = userId; // 💡 Attach the username to this socket
+    socket.join(userId); // Join personal room
     console.log(`User ${userId} joined their room`);
   });
 
   // Handle incoming messages
   socket.on("message", async ({ room, message, sender, recipient }) => {
     const timestamp = new Date().toISOString();
-    const messageTimestamp = new Date().getTime(); // Unix timestamp in milliseconds
+    const messageTimestamp = new Date().getTime();
 
-    // // Save the message in the database (for history, notifications, etc.)
-    // const savedMessage = await Message.create({
-    //   chatroomId: room,
-    //   sender,
-    //   receiver: recipient,
-    //   message,
-    // });
-
-    // Create a notification for the recipient
-    const newNotification = new Notification({
-      recipient: recipient,
-      message: `New message from ${sender}`,
-      timestamp: Date.now(),
-      seen: false, // Default value for 'seen'
-    });
-    await newNotification.save();
-
-    const notificationData = {
-      message: newNotification.message,
-      timestamp: newNotification.timestamp,
-      seen: newNotification.seen,
-      recipient: newNotification.recipient,
-      _id: newNotification._id,
-    };
-
-    // Send the message to all room members
+    // ✅ Send the message to the chat room
     io.to(room).emit("receive_message", {
       message,
       sender,
       timestamp: messageTimestamp,
     });
 
-    // Send the notification to the specific recipient (real-time)
+    // ✅ Check if recipient is already in the chat room
+    const socketsInRoom = await io.in(room).fetchSockets();
+    const isRecipientInRoom = socketsInRoom.some(
+      (s) => s.data.userName === recipient
+    );
+
+    // ❌ If recipient is in room, don't notify
+    if (isRecipientInRoom) {
+      console.log(
+        `Recipient ${recipient} is already in room: no notification.`
+      );
+      return;
+    }
+
+    // ✅ Otherwise, create and emit a notification
+    const newNotification = new Notification({
+      recipient,
+      message: `New message from ${sender}`,
+      timestamp: Date.now(),
+      seen: false,
+    });
+
+    await newNotification.save();
+
+    const notificationData = {
+      message: newNotification.message,
+      timestamp: newNotification.timestamp,
+      seen: false,
+      recipient: newNotification.recipient,
+      _id: newNotification._id,
+    };
+
     io.to(recipient).emit("receive_notification", notificationData);
     console.log("Sent notification to:", recipient, notificationData);
   });
