@@ -1,7 +1,8 @@
 import bcrypt from "bcrypt";
 import skillswapuser from "../Model/User.js";
 import { TryCatch } from "../middleware/error.js"; // Import the TryCatch utility
-
+import jwt from "jsonwebtoken";
+import { setTokenCookie } from "../utils/cookieUtils.js";
 // Signup Controller
 export const signup = TryCatch(async (req, res, next) => {
   const { userName, firstName, lastName, email, password } = req.body;
@@ -43,7 +44,12 @@ export const signup = TryCatch(async (req, res, next) => {
 
     // Save the new user to the database
     const result = await newUser.save();
+    const token = jwt.sign({ id: result._id }, process.env.JWT_SECRET, {
+      expiresIn: "7d",
+    });
 
+    // ✅ Set cookie
+    setTokenCookie(res, token);
     // Respond with a success message and user ID
     res.status(201).json({
       message: "User registered successfully",
@@ -75,6 +81,13 @@ export const login = TryCatch(async (req, res, next) => {
 
       if (passwordMatch) {
         console.log("User login successful");
+        // ✅ Generate token
+        const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, {
+          expiresIn: "7d",
+        });
+
+        // ✅ Set cookie
+        setTokenCookie(res, token);
         return res
           .status(200)
           .json({ message: "User login successful", userType: "user" });
@@ -94,3 +107,12 @@ export const login = TryCatch(async (req, res, next) => {
     return res.status(500).json({ message: "Server error" });
   }
 });
+
+export const logout = (req, res) => {
+  res.clearCookie("token", {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production", // true for HTTPS
+    sameSite: "strict",
+  });
+  return res.status(200).json({ message: "Logged out successfully" });
+};

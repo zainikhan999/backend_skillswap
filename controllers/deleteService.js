@@ -1,19 +1,26 @@
-import Services from "../Model/Services.js"; // Import the Services model
-import { TryCatch } from "../middleware/error.js"; // Import the TryCatch utility
+import Services from "../Model/Services.js";
+import { TryCatch } from "../middleware/error.js";
+
 export const deleteService = TryCatch(async (req, res, next) => {
-  const { gigId } = req.params; // Extract gigId from request parameters
+  const { gigId } = req.params;
+  const username = req.user?.userName;
 
-  try {
-    // Find and delete the gig by ID
-    const deletedGig = await Services.findByIdAndDelete(gigId);
-
-    if (!deletedGig) {
-      return res.status(404).json({ message: "Gig not found" });
-    }
-
-    res.status(200).json({ message: "Gig deleted successfully" });
-  } catch (error) {
-    console.error("Error deleting gig:", error);
-    res.status(500).json({ message: "Server error" });
+  if (!username) {
+    return res.status(401).json({ message: "Unauthorized. Login required." });
   }
+
+  // Find the gig by ObjectId
+  const gig = await Services.findById(gigId); // ✅ This expects a valid ObjectId
+
+  if (!gig) {
+    return res.status(404).json({ message: "Gig not found" });
+  }
+
+  // Verify ownership
+  if (gig.username !== username) {
+    return res.status(403).json({ message: "Not allowed to delete this gig" });
+  }
+
+  await gig.deleteOne();
+  res.status(200).json({ message: "Gig deleted successfully" });
 });

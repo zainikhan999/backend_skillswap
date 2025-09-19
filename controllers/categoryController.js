@@ -1,5 +1,4 @@
 import { GoogleGenAI } from "@google/genai";
-import axios from "axios";
 import Category from "../Model/Category.js"; // Import the Category model
 import dotenv from "dotenv";
 

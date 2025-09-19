@@ -12,7 +12,11 @@ import ChatRoom from "./Model/ChatRoom.js";
 import Notification from "./Model/Notification.js";
 import SwapDetails from "./Model/SwapDetails.js";
 import classifyRoute from "./routes/classifyRoute.js";
-
+import cookieParser from "cookie-parser";
+import swapRoute from "./routes/swapRoute.js";
+import { protect } from "./middleware/auth.js";
+import csurf from "csurf";
+import User from "./Model/User.js"; // Add this line
 dotenv.config();
 const envMode = process.env.NODE_ENV || "DEVELOPMENT";
 const MONGO_URI = process.env.MONGO_URI;
@@ -24,11 +28,20 @@ const io = new Server(server, {
   origin: process.env.FRONTEND_URL,
   cors: corsOptions, //enable cors
 });
+app.use(cookieParser()); // ✅ Parse cookies
+
 app.use(cors(corsOptions)); //
 
 app.use(express.json());
+app.use(csurf({ cookie: true }));
+
+// ✅ Route to get CSRF token
+app.get("/api/csrf-token", (req, res) => {
+  res.json({ csrfToken: req.csrfToken() });
+});
 app.use("/api", authRoutes);
 app.use("/api", classifyRoute);
+app.use("/api", swapRoute);
 // ________________________________________________Socketio Connection_____________________________________________
 io.on("connection", (socket) => {
   console.log("User connected:", socket.id);
@@ -144,7 +157,7 @@ app.post("/message", async (req, res) => {
   }
 });
 
-app.get("/get-notifications", async (req, res) => {
+app.get("/get-notifications", protect, async (req, res) => {
   try {
     const { recipient } = req.query;
     if (!recipient) {
@@ -161,7 +174,7 @@ app.get("/get-notifications", async (req, res) => {
   }
 });
 
-app.post("/update-notification", async (req, res) => {
+app.post("/update-notification", protect, async (req, res) => {
   try {
     const { recipient, notificationIds } = req.body;
     console.log("Received data:", recipient, notificationIds); // Add this line to check incoming data
@@ -183,7 +196,7 @@ app.post("/update-notification", async (req, res) => {
   }
 });
 
-app.get("/chats/:username", async (req, res) => {
+app.get("/chats/:username", protect, async (req, res) => {
   const { username } = req.params;
 
   try {
@@ -205,27 +218,66 @@ app.get("/chats/:username", async (req, res) => {
   }
 });
 
-app.get("/messages/:user1/:user2", async (req, res) => {
+app.get("/messages/:user1/:user2", protect, async (req, res) => {
   const { user1, user2 } = req.params;
 
   try {
+    // First, get the ObjectIds for the usernames
+    const user1Doc = await User.findOne({
+      $or: [{ userName: user1 }, { username: user1 }, { name: user1 }],
+    });
+
+    const user2Doc = await User.findOne({
+      $or: [{ userName: user2 }, { username: user2 }, { name: user2 }],
+    });
+
+    if (!user1Doc || !user2Doc) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    const user1Id = user1Doc._id;
+    const user2Id = user2Doc._id;
+
+    console.log(
+      `Looking for messages between ${user1} (${user1Id}) and ${user2} (${user2Id})`
+    );
+
+    // Now query using ObjectIds
     const messages = await Message.find({
       $or: [
-        { sender: user1, receiver: user2 },
+        { sender: user1Id, receiver: user2Id },
+        { sender: user2Id, receiver: user1Id },
+        { sender: user1, receiver: user2 }, // Also check username format for backwards compatibility
         { sender: user2, receiver: user1 },
       ],
-    }).sort({ timestamp: 1 }); // updated sort field too
+    }).sort({ timestamp: 1 });
 
-    res.json(messages);
+    console.log(`Found ${messages.length} messages`);
+
+    // Transform ObjectIds back to usernames for frontend
+    const transformedMessages = messages.map((msg) => {
+      const senderUsername =
+        msg.sender.toString() === user1Id.toString() ? user1 : user2;
+      const receiverUsername =
+        msg.receiver.toString() === user1Id.toString() ? user1 : user2;
+
+      return {
+        ...msg.toObject(),
+        sender: senderUsername,
+        receiver: receiverUsername,
+      };
+    });
+
+    res.json(transformedMessages);
   } catch (err) {
-    console.error(err);
+    console.error("Error in messages endpoint:", err);
     res.status(500).json({ error: "Could not fetch chat history" });
   }
 });
 
 // Route to get notifications for the logged-in user
 // Route to get notifications for the logged-in user
-app.get("/notifications", async (req, res) => {
+app.get("/notifications", protect, async (req, res) => {
   try {
     const { userId } = req.query; // Retrieve the userId from the query parameter
 
@@ -245,7 +297,7 @@ app.get("/notifications", async (req, res) => {
   }
 });
 
-app.post("/message/seen", (req, res) => {
+app.post("/message/seen", protect, (req, res) => {
   const { timestamp } = req.body;
   if (!timestamp) {
     return res.status(400).json({ error: "Timestamp is required" });
@@ -265,7 +317,7 @@ app.post("/message/seen", (req, res) => {
     });
 });
 
-app.post("/swapform", async (req, res) => {
+app.post("/swapform", protect, async (req, res) => {
   const {
     taskId,
     currentUser,
@@ -322,7 +374,7 @@ app.post("/swapform", async (req, res) => {
     res.status(500).json({ error: "Internal Server Error" });
   }
 });
-app.get("/get-swap-tasks", async (req, res) => {
+app.get("/get-swap-tasks", protect, async (req, res) => {
   const currentUser = req.query.currentUser;
   // fetch the task id for the current user
   try {
@@ -344,7 +396,7 @@ app.get("/get-swap-tasks", async (req, res) => {
   }
 });
 
-app.post("/confirm-task", async (req, res) => {
+app.post("/confirm-task", protect, async (req, res) => {
   const { taskId, currentUser } = req.body;
 
   try {
@@ -370,7 +422,7 @@ app.post("/confirm-task", async (req, res) => {
   }
 });
 
-app.post("/delete-task", async (req, res) => {
+app.post("/delete-task", protect, async (req, res) => {
   const { taskId } = req.body;
 
   try {

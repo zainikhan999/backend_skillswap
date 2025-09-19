@@ -1,21 +1,25 @@
 import User from "../Model/User.js"; // or wherever your User model is
 import { TryCatch } from "../middleware/error.js";
 export const swapCount = TryCatch(async (req, res, next) => {
-  console.log("Received increment request with body:", req.body);
+  const currentUser = req.user.userName; // Provided by `protect` middleware
 
   const { users } = req.body;
-
-  if (!users || users.length !== 2) {
-    return res
-      .status(400)
-      .json({ success: false, message: "Missing or invalid users" });
+  if (!currentUser) {
+    return res.status(401).json({ success: false, message: "Unauthorized" });
   }
+  if (!users || users.length !== 2 || !users.includes(currentUser)) {
+    return res.status(400).json({
+      success: false,
+      message:
+        "You can only increment swap involving yourself and one other user",
+    });
+  }
+
+  const otherUser = users.find((u) => u !== currentUser);
 
   const result = await User.updateMany(
     {
-      $or: users.map((username) => ({
-        userName: { $regex: `^${username}$`, $options: "i" },
-      })),
+      userName: { $in: [currentUser, otherUser] },
     },
     { $inc: { swapscount: 1 } }
   );

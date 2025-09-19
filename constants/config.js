@@ -1,5 +1,5 @@
 const corsOptions = {
-  origin: "https://skillswap-frontend-ten.vercel.app/",
+  origin: "http://localhost:3000",
   methods: ["GET", "POST", "PUT", "DELETE"],
   credentials: true,
 };
