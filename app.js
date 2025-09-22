@@ -1,6 +1,6 @@
 import dotenv from "dotenv";
 import express from "express";
-import { Server } from "socket.io";
+// import { Server } from "socket.io";
 import { createServer } from "http";
 import cors from "cors";
 import { connectDB } from "./utils/features.js";
@@ -29,14 +29,14 @@ const server = createServer(app); //create http server
 //   cors: corsOptions, //enable cors
 // });
 
-const io = new Server(server, {
-  cors: {
-    origin: "https://skillswap-frontend-ten.vercel.app",
-    addTrailingSlash: false,
-    methods: ["GET", "POST"],
-    credentials: true,
-  },
-});
+// const io = new Server(server, {
+//   cors: {
+//     origin: "https://skillswap-frontend-ten.vercel.app",
+//     addTrailingSlash: false,
+//     methods: ["GET", "POST"],
+//     credentials: true,
+//   },
+// });
 
 app.use(cookieParser()); // ✅ Parse cookies
 
@@ -57,77 +57,77 @@ app.use("/api", swapRoute);
 app.get("/", (req, res) => {
   res.json({ message: "Server is running", timestamp: new Date() });
 });
-// ________________________________________________Socketio Connection_____________________________________________
-io.on("connection", (socket) => {
-  console.log("User connected:", socket.id);
+// // ________________________________________________Socketio Connection_____________________________________________
+// io.on("connection", (socket) => {
+//   console.log("User connected:", socket.id);
 
-  // Join a specific room
-  socket.on("join_room", (room) => {
-    if (!socket.rooms.has(room)) {
-      socket.join(room);
-      console.log(`User joined room: ${room}`);
-    }
-  });
+//   // Join a specific room
+//   socket.on("join_room", (room) => {
+//     if (!socket.rooms.has(room)) {
+//       socket.join(room);
+//       console.log(`User joined room: ${room}`);
+//     }
+//   });
 
-  socket.on("my-room", (userId) => {
-    socket.data.userName = userId; // 💡 Attach the username to this socket
-    socket.join(userId); // Join personal room
-    console.log(`User ${userId} joined their room`);
-  });
+//   socket.on("my-room", (userId) => {
+//     socket.data.userName = userId; // 💡 Attach the username to this socket
+//     socket.join(userId); // Join personal room
+//     console.log(`User ${userId} joined their room`);
+//   });
 
-  // Handle incoming messages
-  socket.on("message", async ({ room, message, sender, recipient }) => {
-    const timestamp = new Date().toISOString();
-    const messageTimestamp = new Date().getTime();
+//   // Handle incoming messages
+//   socket.on("message", async ({ room, message, sender, recipient }) => {
+//     const timestamp = new Date().toISOString();
+//     const messageTimestamp = new Date().getTime();
 
-    // ✅ Send the message to the chat room
-    io.to(room).emit("receive_message", {
-      message,
-      sender,
-      timestamp: messageTimestamp,
-    });
+//     // ✅ Send the message to the chat room
+//     io.to(room).emit("receive_message", {
+//       message,
+//       sender,
+//       timestamp: messageTimestamp,
+//     });
 
-    // ✅ Check if recipient is already in the chat room
-    const socketsInRoom = await io.in(room).fetchSockets();
-    const isRecipientInRoom = socketsInRoom.some(
-      (s) => s.data.userName === recipient
-    );
+//     // ✅ Check if recipient is already in the chat room
+//     const socketsInRoom = await io.in(room).fetchSockets();
+//     const isRecipientInRoom = socketsInRoom.some(
+//       (s) => s.data.userName === recipient
+//     );
 
-    // ❌ If recipient is in room, don't notify
-    if (isRecipientInRoom) {
-      console.log(
-        `Recipient ${recipient} is already in room: no notification.`
-      );
-      return;
-    }
+//     // ❌ If recipient is in room, don't notify
+//     if (isRecipientInRoom) {
+//       console.log(
+//         `Recipient ${recipient} is already in room: no notification.`
+//       );
+//       return;
+//     }
 
-    // ✅ Otherwise, create and emit a notification
-    const newNotification = new Notification({
-      recipient,
-      message: `New message from ${sender}`,
-      timestamp: Date.now(),
-      seen: false,
-    });
+//     // ✅ Otherwise, create and emit a notification
+//     const newNotification = new Notification({
+//       recipient,
+//       message: `New message from ${sender}`,
+//       timestamp: Date.now(),
+//       seen: false,
+//     });
 
-    await newNotification.save();
+//     await newNotification.save();
 
-    const notificationData = {
-      message: newNotification.message,
-      timestamp: newNotification.timestamp,
-      seen: false,
-      recipient: newNotification.recipient,
-      _id: newNotification._id,
-    };
+//     const notificationData = {
+//       message: newNotification.message,
+//       timestamp: newNotification.timestamp,
+//       seen: false,
+//       recipient: newNotification.recipient,
+//       _id: newNotification._id,
+//     };
 
-    io.to(recipient).emit("receive_notification", notificationData);
-    console.log("Sent notification to:", recipient, notificationData);
-  });
+//     io.to(recipient).emit("receive_notification", notificationData);
+//     console.log("Sent notification to:", recipient, notificationData);
+//   });
 
-  // Handle disconnection
-  socket.on("disconnect", () => {
-    console.log("User disconnected");
-  });
-});
+//   // Handle disconnection
+//   socket.on("disconnect", () => {
+//     console.log("User disconnected");
+//   });
+// });
 
 // Save chat room and message, and create notification for the recipient
 app.post("/message", async (req, res) => {
