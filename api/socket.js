@@ -4,6 +4,10 @@ import { Server } from "socket.io";
 import Message from "../Model/Message.js";
 import Notification from "../Model/Notification.js";
 import ChatRoom from "../Model/ChatRoom.js";
+import { connectDB } from "../utils/features.js";
+dotenv.config();
+const MONGO_URI = process.env.MONGO_URI;
+connectDB(MONGO_URI);
 
 const SocketHandler = (req, res) => {
   if (res.socket.server.io) {
