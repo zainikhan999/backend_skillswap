@@ -32,20 +32,23 @@ const server = createServer(app); //create http server
 const io = new Server(server, {
   cors: {
     origin: "https://skillswap-frontend-ten.vercel.app",
-    cors: corsOptions,
+    methods: ["GET", "POST"],
+    credentials: true,
   },
 });
+
 app.use(cookieParser()); // ✅ Parse cookies
 
 app.use(cors(corsOptions)); //
 
 app.use(express.json());
-app.use(csurf({ cookie: true }));
 
 // ✅ Route to get CSRF token
 app.get("/api/csrf-token", (req, res) => {
   res.json({ csrfToken: req.csrfToken() });
 });
+app.use(csurf({ cookie: true }));
+
 app.use("/api", authRoutes);
 app.use("/api", classifyRoute);
 app.use("/api", swapRoute);
