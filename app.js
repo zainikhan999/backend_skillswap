@@ -49,6 +49,10 @@ app.get("/api/csrf-token", (req, res) => {
 app.use("/api", authRoutes);
 app.use("/api", classifyRoute);
 app.use("/api", swapRoute);
+
+app.get("/", (req, res) => {
+  res.json({ message: "Server is running", timestamp: new Date() });
+});
 // ________________________________________________Socketio Connection_____________________________________________
 io.on("connection", (socket) => {
   console.log("User connected:", socket.id);
