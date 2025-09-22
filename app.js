@@ -468,3 +468,4 @@ if (process.env.NODE_ENV !== "DEPLOYMENT") {
 }
 
 export default app;
+export { envMode };
