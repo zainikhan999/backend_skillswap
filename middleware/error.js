@@ -1,4 +1,3 @@
-// import { envMode } from "../app.js"; // Ensure you are importing your environment mode correctly
 import winston from "winston";
 
 const logger = winston.createLogger({
