@@ -24,9 +24,16 @@ connectDB(MONGO_URI);
 //explain each line by line in detail
 const app = express(); //create express app
 const server = createServer(app); //create http server
+// const io = new Server(server, {
+//   origin: process.env.FRONTEND_URL,
+//   cors: corsOptions, //enable cors
+// });
+
 const io = new Server(server, {
-  origin: process.env.FRONTEND_URL,
-  cors: corsOptions, //enable cors
+  cors: {
+    origin: "https://skillswap-frontend-ten.vercel.app",
+    cors: corsOptions,
+  },
 });
 app.use(cookieParser()); // ✅ Parse cookies
 
