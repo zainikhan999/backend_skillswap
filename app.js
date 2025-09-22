@@ -32,6 +32,7 @@ const server = createServer(app); //create http server
 const io = new Server(server, {
   cors: {
     origin: "https://skillswap-frontend-ten.vercel.app",
+    addTrailingSlash: false,
     methods: ["GET", "POST"],
     credentials: true,
   },
