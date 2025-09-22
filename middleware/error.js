@@ -1,4 +1,4 @@
-import { envMode } from "../app.js"; // Ensure you are importing your environment mode correctly
+// import { envMode } from "../app.js"; // Ensure you are importing your environment mode correctly
 import winston from "winston";
 
 const logger = winston.createLogger({
@@ -8,7 +8,7 @@ const logger = winston.createLogger({
     new winston.transports.File({ filename: "error.log" }), // Log to a file
   ],
 });
-
+const envMode = process.env.NODE_ENV || "DEVELOPMENT";
 // Error Middleware
 const errorMiddleware = (err, req, res, next) => {
   // Set default error message and status code
