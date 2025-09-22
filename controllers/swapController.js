@@ -209,42 +209,236 @@ export const acceptSwap = TryCatch(async (req, res, next) => {
 
 export const cancelSwap = TryCatch(async (req, res, next) => {
   const { swapId } = req.params;
+  const userId = req.user._id;
 
-  const cancelledSwap = await SwapDetails.findOneAndUpdate(
-    { swapId },
-    { status: "cancelled", closedAt: new Date() },
-    { new: true }
-  );
+  try {
+    // Find the swap
+    const swap = await SwapDetails.findOne({ swapId })
+      .populate("requester.userId", "userName")
+      .populate("responder.userId", "userName");
 
-  if (!cancelledSwap) {
-    return res.status(404).json({ message: "Swap not found" });
+    if (!swap) {
+      return res.status(404).json({ message: "Swap not found" });
+    }
+
+    // Check if user is part of this swap
+    const isRequester =
+      swap.requester.userId._id.toString() === userId.toString();
+    const isResponder =
+      swap.responder.userId._id.toString() === userId.toString();
+
+    if (!isRequester && !isResponder) {
+      return res
+        .status(403)
+        .json({ message: "Unauthorized to cancel this swap" });
+    }
+
+    // Update swap status
+    const cancelledSwap = await SwapDetails.findOneAndUpdate(
+      { swapId },
+      {
+        status: "cancelled",
+        closedAt: new Date(),
+      },
+      { new: true }
+    );
+
+    // Create system message in chat
+    const chatroomId = [
+      swap.requester.userId._id.toString(),
+      swap.responder.userId._id.toString(),
+    ]
+      .sort()
+      .join("_");
+
+    const cancellationMessage = new Message({
+      chatroomId,
+      sender: userId,
+      receiver: isRequester
+        ? swap.responder.userId._id
+        : swap.requester.userId._id,
+      message: `Swap "${swap.requester.taskName} ↔ ${
+        swap.responder.taskName
+      }" has been cancelled by ${
+        isRequester
+          ? swap.requester.userId.userName
+          : swap.responder.userId.userName
+      }.`,
+      type: "system",
+      isSwapRequest: false,
+    });
+
+    await cancellationMessage.save();
+
+    return res.status(200).json({
+      message: "Swap cancelled",
+      swap: cancelledSwap,
+    });
+  } catch (error) {
+    console.error("Error cancelling swap:", error);
+    return res.status(500).json({ message: "Failed to cancel swap" });
   }
-
-  return res.status(200).json({
-    message: "Swap cancelled",
-    swap: cancelledSwap,
-  });
 });
 
 export const completeSwap = TryCatch(async (req, res, next) => {
   const { swapId } = req.params;
+  const userId = req.user._id;
 
-  const completedSwap = await SwapDetails.findOneAndUpdate(
-    { swapId },
-    { status: "completed", closedAt: new Date() },
-    { new: true }
-  );
+  try {
+    // Find the swap
+    const swap = await SwapDetails.findOne({ swapId })
+      .populate("requester.userId", "userName")
+      .populate("responder.userId", "userName");
 
-  if (!completedSwap) {
-    return res.status(404).json({ message: "Swap not found" });
+    if (!swap) {
+      return res.status(404).json({ message: "Swap not found" });
+    }
+
+    // Check if user is part of this swap
+    const isRequester =
+      swap.requester.userId._id.toString() === userId.toString();
+    const isResponder =
+      swap.responder.userId._id.toString() === userId.toString();
+
+    if (!isRequester && !isResponder) {
+      return res
+        .status(403)
+        .json({ message: "Unauthorized to complete this swap" });
+    }
+
+    // Check if user already completed
+    if (
+      (isRequester && swap.requesterCompleted) ||
+      (isResponder && swap.responderCompleted)
+    ) {
+      return res
+        .status(400)
+        .json({ message: "You have already marked this swap as complete" });
+    }
+
+    // Update completion status
+    const updateFields = {};
+    let statusMessage = "";
+
+    if (isRequester) {
+      updateFields.requesterCompleted = true;
+      updateFields["requester.completedAt"] = new Date();
+
+      if (swap.responderCompleted) {
+        // Both completed - fully close the swap
+        updateFields.status = "completed";
+        updateFields.fullyCompletedAt = new Date();
+        updateFields.closedAt = new Date();
+        statusMessage = `🎉 Swap "${swap.requester.taskName} ↔ ${swap.responder.taskName}" has been FULLY COMPLETED! Chat is now closed.`;
+      } else {
+        // Only requester completed
+        updateFields.status = "partially_completed";
+        statusMessage = `✅ ${swap.requester.userId.userName} has marked their part complete. Waiting for ${swap.responder.userId.userName} to complete.`;
+      }
+    } else {
+      updateFields.responderCompleted = true;
+      updateFields["responder.completedAt"] = new Date();
+
+      if (swap.requesterCompleted) {
+        // Both completed - fully close the swap
+        updateFields.status = "completed";
+        updateFields.fullyCompletedAt = new Date();
+        updateFields.closedAt = new Date();
+        statusMessage = `🎉 Swap "${swap.requester.taskName} ↔ ${swap.responder.taskName}" has been FULLY COMPLETED! Chat is now closed.`;
+      } else {
+        // Only responder completed
+        updateFields.status = "partially_completed";
+        statusMessage = `✅ ${swap.responder.userId.userName} has marked their part complete. Waiting for ${swap.requester.userId.userName} to complete.`;
+      }
+    }
+
+    // Update the swap
+    const updatedSwap = await SwapDetails.findOneAndUpdate(
+      { swapId },
+      { $set: updateFields },
+      { new: true }
+    );
+
+    // Create system message
+    const chatroomId = [
+      swap.requester.userId._id.toString(),
+      swap.responder.userId._id.toString(),
+    ]
+      .sort()
+      .join("_");
+
+    const systemMessage = new Message({
+      chatroomId,
+      sender: userId,
+      receiver: isRequester
+        ? swap.responder.userId._id
+        : swap.requester.userId._id,
+      message: statusMessage,
+      type: "system",
+      isSwapRequest: false,
+    });
+
+    await systemMessage.save();
+
+    return res.status(200).json({
+      message:
+        updatedSwap.status === "completed"
+          ? "Swap fully completed! Chat is now closed."
+          : "Your part marked complete. Waiting for other party.",
+      swap: updatedSwap,
+      bothCompleted: updatedSwap.status === "completed",
+    });
+  } catch (error) {
+    console.error("Error completing swap:", error);
+    return res.status(500).json({ message: "Failed to complete swap" });
   }
-
-  return res.status(200).json({
-    message: "Swap marked as completed",
-    swap: completedSwap,
-  });
 });
 
+export const getSwapDetails = TryCatch(async (req, res, next) => {
+  const { swapId } = req.params;
+
+  try {
+    const swap = await SwapDetails.findOne({ swapId });
+
+    if (!swap) {
+      return res.status(404).json({ message: "Swap not found" });
+    }
+
+    return res.status(200).json({
+      swapId: swap.swapId,
+      status: swap.status,
+      requesterCompleted: swap.requesterCompleted,
+      responderCompleted: swap.responderCompleted,
+      bothCompleted: swap.status === "completed",
+    });
+  } catch (error) {
+    console.error("Error getting swap details:", error);
+    return res.status(500).json({ message: "Failed to get swap details" });
+  }
+});
+
+export const getSwapStatus = TryCatch(async (req, res, next) => {
+  const { swapId } = req.params;
+
+  try {
+    const swap = await SwapDetails.findOne({ swapId });
+
+    if (!swap) {
+      return res.status(404).json({ message: "Swap not found" });
+    }
+
+    return res.status(200).json({
+      swapId: swap.swapId,
+      status: swap.status,
+      requesterCompleted: swap.requesterCompleted || false,
+      responderCompleted: swap.responderCompleted || false,
+      bothCompleted: swap.status === "completed",
+    });
+  } catch (error) {
+    console.error("Error getting swap status:", error);
+    return res.status(500).json({ message: "Failed to get swap status" });
+  }
+});
 export const getReceivedSwapRequests = async (req, res) => {
   try {
     const { userId } = req.params;
