@@ -460,7 +460,11 @@ app.post("/delete-task", protect, async (req, res) => {
 
 // error middle ware at the end
 app.use(errorMiddleware);
-server.listen(5000, () => {
-  console.log("Server is running on port 5000");
-});
+
+if (process.env.NODE_ENV !== "DEPLOYMENT") {
+  server.listen(5000, () => {
+    console.log("Server is running on port 5000");
+  });
+}
+
 export default app;
