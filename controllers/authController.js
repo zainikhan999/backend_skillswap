@@ -51,10 +51,15 @@ export const signup = TryCatch(async (req, res, next) => {
     // ✅ Set cookie
     setTokenCookie(res, token);
     // Respond with a success message and user ID
+
     res.status(201).json({
       message: "User registered successfully",
       userId: result._id,
     });
+    // res.status(201).json({
+    //   message: "User registered successfully",
+    //   userId: result._id,
+    // });
   } catch (error) {
     console.error("Error saving user data:", error);
     // Call next to forward the error to the error-handling middleware
@@ -88,9 +93,13 @@ export const login = TryCatch(async (req, res, next) => {
 
         // ✅ Set cookie
         setTokenCookie(res, token);
-        return res
-          .status(200)
-          .json({ message: "User login successful", userType: "user" });
+        return res.status(200).json({
+          message: "User login successful",
+          userType: "user",
+        });
+        // return res
+        //   .status(200)
+        //   .json({ message: "User login successful", userType: "user" });
       } else {
         console.log("Invalid password");
         return res
@@ -111,7 +120,7 @@ export const login = TryCatch(async (req, res, next) => {
 export const logout = (req, res) => {
   res.clearCookie("token", {
     httpOnly: true,
-    secure: process.env.NODE_ENV === "production", // true for HTTPS
+    secure: process.env.NODE_ENV === "DEPLOYMENT", // true for HTTPS
     sameSite: "strict",
   });
   return res.status(200).json({ message: "Logged out successfully" });
