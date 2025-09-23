@@ -1,6 +1,6 @@
 import dotenv from "dotenv";
 import express from "express";
-// import { Server } from "socket.io";
+import { Server } from "socket.io";
 import { createServer } from "http";
 import cors from "cors";
 import { connectDB } from "./utils/features.js";
