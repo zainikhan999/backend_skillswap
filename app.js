@@ -24,10 +24,10 @@ connectDB(MONGO_URI);
 //explain each line by line in detail
 const app = express(); //create express app
 const server = createServer(app); //create http server
-const io = new Server(server, {
-  origin: process.env.FRONTEND_URL,
-  cors: corsOptions, //enable cors
-});
+// const io = new Server(server, {
+//   origin: process.env.FRONTEND_URL,
+//   cors: corsOptions, //enable cors
+// });
 
 // const io = new Server(server, {
 //   cors: {
@@ -37,6 +37,20 @@ const io = new Server(server, {
 //     credentials: true,
 //   },
 // });
+// ✅ FIXED: Correct Socket.IO configuration
+const io = new Server(server, {
+  cors: {
+    origin: [
+      "http://localhost:3000",
+      "https://skillswap-frontend-ten.vercel.app",
+      process.env.FRONTEND_URL,
+    ].filter(Boolean), // Remove any undefined values
+    methods: ["GET", "POST"],
+    credentials: true,
+  },
+  // Use standard path - don't change this
+  path: "/socket.io/",
+});
 
 app.use(cookieParser()); // ✅ Parse cookies
 
@@ -44,7 +58,18 @@ app.use(cors(corsOptions)); //
 
 app.use(express.json());
 
-app.use(csurf({ cookie: true }));
+// app.use(csurf({ cookie: true }));
+// ✅ FIXED: More flexible CSRF configuration
+app.use(
+  csurf({
+    cookie: {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+      maxAge: 3600000, // 1 hour
+    },
+  })
+);
 
 // ✅ Route to get CSRF token
 app.get("/api/csrf-token", (req, res) => {
