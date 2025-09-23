@@ -68,6 +68,16 @@ app.use(
       sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
       maxAge: 3600000, // 1 hour
     },
+    // ✅ Add this to accept your custom header format
+    value: function (req) {
+      return (
+        req.body._csrf ||
+        req.query._csrf ||
+        req.headers["x-csrf-token"] ||
+        req.headers["csrf-token"] ||
+        req.headers["X-CSRF-Token"] // Accept your frontend header format
+      );
+    },
   })
 );
 
