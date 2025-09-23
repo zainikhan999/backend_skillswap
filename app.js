@@ -64,18 +64,20 @@ app.use(
   csurf({
     cookie: {
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+      secure: process.env.NODE_ENV === "DEPLOYMENT",
+      sameSite: process.env.NODE_ENV === "DEPLOYMENT" ? "none" : "lax",
       maxAge: 3600000, // 1 hour
     },
-    // ✅ Add this to accept your custom header format
+    // ✅ CRITICAL: Custom value function to accept your header format
     value: function (req) {
+      // Check all possible locations for CSRF token
       return (
-        req.body._csrf ||
-        req.query._csrf ||
-        req.headers["x-csrf-token"] ||
-        req.headers["csrf-token"] ||
-        req.headers["X-CSRF-Token"] // Accept your frontend header format
+        req.body._csrf || // Body
+        req.query._csrf || // Query string
+        req.headers["csrf-token"] || // Header: csrf-token
+        req.headers["x-csrf-token"] || // Header: x-csrf-token (lowercase)
+        req.headers["X-CSRF-Token"] || // Header: X-CSRF-Token (your format)
+        req.headers["x-xsrf-token"] // Header: x-xsrf-token (alternative)
       );
     },
   })
