@@ -498,12 +498,13 @@ app.post("/delete-task", protect, async (req, res) => {
 // error middle ware at the end
 app.use(errorMiddleware);
 
-if (process.env.NODE_ENV !== "DEPLOYMENT") {
-  const PORT = process.env.PORT || 5000;
-  server.listen(PORT, () => {
-    console.log(`Server is running in ${envMode} mode on port ${PORT}`);
-  });
-}
+// REMOVE THE CONDITION - always start the server
+const PORT = process.env.PORT || 5000;
+server.listen(PORT, () => {
+  console.log(
+    `Server is running in ${process.env.NODE_ENV} mode on port ${PORT}`
+  );
+});
 
 export default app;
 export { envMode };
