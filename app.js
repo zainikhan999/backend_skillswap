@@ -74,9 +74,8 @@ app.use(
       return (
         req.body._csrf || // Body
         req.query._csrf || // Query string
-        req.headers["csrf-token"] || // Header: csrf-token
-        req.headers["x-csrf-token"] || // Header: x-csrf-token (lowercase)
-        req.headers["X-CSRF-Token"] || // Header: X-CSRF-Token (your format)
+        req.headers["csrf-token"] || // Header: csrf-token (lowercase)
+        req.headers["x-csrf-token"] || // Header: x-csrf-token (lowercase) ✅ THIS IS THE KEY ONE
         req.headers["x-xsrf-token"] // Header: x-xsrf-token (alternative)
       );
     },
