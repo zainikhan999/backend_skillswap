@@ -94,11 +94,37 @@ app.use("/api", swapRoute);
 app.get("/", (req, res) => {
   res.json({ message: "Server is running", timestamp: new Date() });
 });
-// ________________________________________________Socketio Connection_____________________________________________
+// ______________________
+//
+// In your index.js backend file, update these socket handlers:
+
+const activeChats = new Map(); // Format: userId -> chattingWithUserId
+
 io.on("connection", (socket) => {
   console.log("User connected:", socket.id);
 
-  // Join a specific room
+  // Track when user starts viewing a chat
+  socket.on("viewing_chat", ({ viewer, chattingWith }) => {
+    // Store which chat this user is viewing
+    activeChats.set(viewer, chattingWith);
+    console.log(`✅ ${viewer} is NOW viewing chat with ${chattingWith}`);
+    console.log(`Active chats:`, Array.from(activeChats.entries()));
+
+    // CRITICAL: Also notify the other person's socket that they're being viewed
+    socket.data.currentChat = chattingWith; // Store on socket itself for reliability
+  });
+
+  socket.on("left_chat", ({ viewer }) => {
+    const wasViewingWith = activeChats.get(viewer);
+    activeChats.delete(viewer);
+    socket.data.currentChat = null; // Clear socket data
+    console.log(
+      `❌ ${viewer} left chat (was with: ${wasViewingWith || "none"})`
+    );
+    console.log(`Active chats:`, Array.from(activeChats.entries()));
+  });
+
+  // Join room handler
   socket.on("join_room", (room) => {
     if (!socket.rooms.has(room)) {
       socket.join(room);
@@ -106,70 +132,153 @@ io.on("connection", (socket) => {
     }
   });
 
+  // Personal room handler
   socket.on("my-room", (userId) => {
-    socket.data.userName = userId; // 💡 Attach the username to this socket
-    socket.join(userId); // Join personal room
-    console.log(`User ${userId} joined their room`);
+    socket.data.userName = userId;
+    socket.join(userId);
+    console.log(`User ${userId} joined their personal room`);
   });
 
-  // Handle incoming messages
-  socket.on("message", async ({ room, message, sender, recipient }) => {
-    const timestamp = new Date().toISOString();
-    const messageTimestamp = new Date().getTime();
-
-    // ✅ Send the message to the chat room
-    io.to(room).emit("receive_message", {
+  // Message handler with improved notification logic
+  socket.on(
+    "message",
+    async ({
+      room,
       message,
       sender,
-      timestamp: messageTimestamp,
-    });
-
-    // ✅ Check if recipient is already in the chat room
-    const socketsInRoom = await io.in(room).fetchSockets();
-    const isRecipientInRoom = socketsInRoom.some(
-      (s) => s.data.userName === recipient
-    );
-
-    // ❌ If recipient is in room, don't notify
-    if (isRecipientInRoom) {
-      console.log(
-        `Recipient ${recipient} is already in room: no notification.`
-      );
-      return;
-    }
-
-    // ✅ Otherwise, create and emit a notification
-    const newNotification = new Notification({
       recipient,
-      message: `New message from ${sender}`,
-      timestamp: Date.now(),
-      seen: false,
-    });
+      type,
+      swapData,
+      proposedTime,
+    }) => {
+      const messageTimestamp = new Date().getTime();
 
-    await newNotification.save();
+      // ALWAYS send message to chat room FIRST
+      io.to(room).emit("receive_message", {
+        message,
+        sender,
+        recipient, // ✅ ADD THIS
+        timestamp: messageTimestamp,
+        type: type || "text",
+        swapData: swapData || null,
+        proposedTime: proposedTime || null,
+      });
 
-    const notificationData = {
-      message: newNotification.message,
-      timestamp: newNotification.timestamp,
-      seen: false,
-      recipient: newNotification.recipient,
-      _id: newNotification._id,
-    };
+      // Don't notify sender of their own message
+      if (sender === recipient) {
+        return;
+      }
 
-    io.to(recipient).emit("receive_notification", notificationData);
-    console.log("Sent notification to:", recipient, notificationData);
-  });
+      // Check if recipient is actively viewing this specific chat
+      const recipientActiveChat = activeChats.get(recipient);
 
-  // Handle disconnection
+      console.log(`📨 Message from ${sender} to ${recipient}`);
+      console.log(`   Sender: ${sender}, Recipient: ${recipient}`);
+      console.log(
+        `   Recipient's active chat: ${recipientActiveChat || "none"}`
+      );
+      console.log(`   Should skip? ${recipientActiveChat === sender}`);
+
+      // CRITICAL: Only skip if recipient is viewing a chat WITH the sender
+      if (recipientActiveChat === sender) {
+        console.log(
+          `   ⏭️  SKIP notification - recipient is viewing this chat`
+        );
+        return;
+      }
+
+      console.log(
+        `   📬 CREATE notification - recipient not viewing this chat`
+      );
+
+      // Create and send notification
+      try {
+        const newNotification = new Notification({
+          recipient,
+          sender,
+          message: `New message from ${sender}: ${message.substring(0, 50)}${
+            message.length > 50 ? "..." : ""
+          }`,
+          type: "message",
+          timestamp: Date.now(),
+          seen: false,
+        });
+
+        await newNotification.save();
+
+        io.to(recipient).emit("receive_notification", {
+          message: newNotification.message,
+          timestamp: newNotification.timestamp,
+          seen: false,
+          recipient: newNotification.recipient,
+          sender: newNotification.sender,
+          type: "message",
+          _id: newNotification._id,
+        });
+
+        console.log(`   ✅ Notification sent to: ${recipient}`);
+      } catch (error) {
+        console.error("   ❌ Error creating notification:", error);
+      }
+    }
+  );
+
+  // Handle disconnection - clean up active chats
   socket.on("disconnect", () => {
-    console.log("User disconnected");
+    const userName = socket.data.userName;
+    if (userName) {
+      activeChats.delete(userName);
+      console.log(`User disconnected: ${userName}`);
+      console.log(`Active chats:`, Array.from(activeChats.entries()));
+    }
   });
 });
 
 // Save chat room and message, and create notification for the recipient
+// app.post("/message", async (req, res) => {
+//   try {
+//     const { room, sender, recipient, message } = req.body;
+
+//     if (!room || !sender || !recipient || !message) {
+//       return res.status(400).json({ error: "Missing required fields." });
+//     }
+
+//     // Save chat room if it doesn't exist
+//     const existingRoom = await ChatRoom.findOne({ roomId: room });
+//     if (!existingRoom) {
+//       await ChatRoom.create({
+//         roomId: room,
+//         participants: [sender, recipient],
+//         serviceId: "default",
+//       });
+//     }
+
+//     // Save the message
+//     const savedMessage = await Message.create({
+//       chatroomId: room,
+//       sender,
+//       receiver: recipient,
+//       message,
+//     });
+
+//     // Create the notification in the DB (no need to emit here)
+//     // const newNotification = new Notification({
+//     //   recipient: recipient,
+//     //   message: `New message from ${sender}`,
+//     //   timestamp: Date.now(),
+//     //   seen: false,
+//     // });
+//     // await newNotification.save();
+
+//     res.status(201).json({ success: true, message: savedMessage });
+//   } catch (err) {
+//     console.error(err);
+//     res.status(500).json({ error: "Internal Server Error" });
+//   }
+// });
 app.post("/message", async (req, res) => {
   try {
-    const { room, sender, recipient, message } = req.body;
+    const { room, sender, recipient, message, type, swapData } = req.body; // ✅ Extract all fields
 
     if (!room || !sender || !recipient || !message) {
       return res.status(400).json({ error: "Missing required fields." });
@@ -185,26 +294,20 @@ app.post("/message", async (req, res) => {
       });
     }
 
-    // Save the message
+    // ✅ Save the message with all fields
     const savedMessage = await Message.create({
       chatroomId: room,
       sender,
       receiver: recipient,
       message,
+      type: type || "message", // ✅ Include type
+      swapData: swapData || null, // ✅ Include swapData
+      timestamp: new Date(),
     });
-
-    // Create the notification in the DB (no need to emit here)
-    // const newNotification = new Notification({
-    //   recipient: recipient,
-    //   message: `New message from ${sender}`,
-    //   timestamp: Date.now(),
-    //   seen: false,
-    // });
-    // await newNotification.save();
 
     res.status(201).json({ success: true, message: savedMessage });
   } catch (err) {
-    console.error(err);
+    console.error("Error in /message endpoint:", err);
     res.status(500).json({ error: "Internal Server Error" });
   }
 });
@@ -229,15 +332,28 @@ app.get("/get-notifications", protect, async (req, res) => {
 app.post("/update-notification", protect, async (req, res) => {
   try {
     const { recipient, notificationIds } = req.body;
-    console.log("Received data:", recipient, notificationIds); // Add this line to check incoming data
+    console.log("Received data:", recipient, notificationIds);
 
     if (!recipient || !notificationIds || notificationIds.length === 0) {
       return res.status(400).json({ error: "Missing required fields." });
     }
 
-    // Update all notifications to seen for the given recipient
+    // Filter out invalid IDs (must be 24 character hex string)
+    const validIds = notificationIds.filter((id) => {
+      return id && id.length === 24 && /^[0-9a-fA-F]{24}$/.test(id);
+    });
+
+    console.log("Valid notification IDs:", validIds);
+
+    // If no valid IDs, just return success (nothing to update)
+    if (validIds.length === 0) {
+      console.log("No valid ObjectIds found");
+      return res.status(200).json({ success: true });
+    }
+
+    // Update only valid notifications
     await Notification.updateMany(
-      { _id: { $in: notificationIds }, recipient: recipient },
+      { _id: { $in: validIds }, recipient: recipient },
       { $set: { seen: true } }
     );
 

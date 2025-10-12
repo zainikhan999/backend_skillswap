@@ -35,7 +35,13 @@ import {
   acceptSwapRequest,
   deleteSwapRequest,
 } from "../controllers/swapController.js";
-
+import {
+  verifyEmail,
+  forgotPassword,
+  verifyResetOTP,
+  resetPassword,
+  resendOTP,
+} from "../controllers/authController.js";
 const app = express.Router();
 
 // Auth routes
@@ -90,5 +96,12 @@ app.get(
 );
 app.post("/api/swap-requests/:requestId/accept", protect, acceptSwapRequest);
 app.delete("/api/swap-requests/:requestId", protect, deleteSwapRequest);
+// Email verification routes
+app.post("/verify-email", verifyEmail);
+app.post("/resend-otp", resendOTP);
 
+// Password reset routes
+app.post("/forgot-password", forgotPassword);
+app.post("/verify-reset-otp", verifyResetOTP);
+app.post("/reset-password", resetPassword);
 export default app;

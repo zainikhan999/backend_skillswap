@@ -1,5 +1,7 @@
 import SkillForm from "../Model/SkillForm.js";
 import { TryCatch } from "../middleware/error.js";
+import skillswapuser from "../Model/User.js"; // ✅ ADD THIS IMPORT
+
 import dotenv from "dotenv";
 dotenv.config();
 import pkg from "cloudinary";
@@ -12,11 +14,50 @@ cloudinary.config({
   api_secret: process.env.CLOUDINARY_API_SECRET,
 });
 
+// export const profile = TryCatch(async (req, res, next) => {
+//   const { name, city, contactNumber, bio, skills, profileImage } = req.body;
+
+//   // ✅ Use authenticated username
+//   const username = req.user.userName;
+
+//   if (
+//     !name ||
+//     !city ||
+//     !contactNumber ||
+//     !bio ||
+//     !skills ||
+//     !Array.isArray(skills)
+//   ) {
+//     return res.status(400).json({
+//       message: "All fields are required, and skills must be an array",
+//     });
+//   }
+
+//   try {
+//     const newProfile = new SkillForm({
+//       name,
+//       username, // ✅ taken from token
+//       city,
+//       contactNumber,
+//       bio,
+//       profileImage,
+//       skills,
+//     });
+
+//     await newProfile.save();
+
+//     res.status(201).json({ message: "Profile submitted successfully" });
+//   } catch (error) {
+//     next(error);
+//   }
+// });
 export const profile = TryCatch(async (req, res, next) => {
   const { name, city, contactNumber, bio, skills, profileImage } = req.body;
 
-  // ✅ Use authenticated username
+  // ✅ Use authenticated username from token
   const username = req.user.userName;
+
+  console.log("📝 Creating profile for user:", username);
 
   if (
     !name ||
@@ -32,20 +73,45 @@ export const profile = TryCatch(async (req, res, next) => {
   }
 
   try {
+    // ✅ Check if profile already exists
+    const existingProfile = await SkillForm.findOne({ username });
+    if (existingProfile) {
+      return res.status(400).json({
+        message: "Profile already exists. Use update endpoint to modify.",
+      });
+    }
+
+    // Create new profile
     const newProfile = new SkillForm({
       name,
-      username, // ✅ taken from token
+      username,
       city,
+      country: "Pakistan", // Default country
       contactNumber,
       bio,
-      profileImage,
+      profileImage: profileImage || "",
       skills,
     });
 
     await newProfile.save();
+    console.log("✅ Profile created in SkillForm collection");
 
-    res.status(201).json({ message: "Profile submitted successfully" });
+    // ✅ CRITICAL: Update user's profileCompleted status
+    const user = await skillswapuser.findOne({ userName: username });
+    if (user) {
+      user.profileCompleted = true;
+      await user.save();
+      console.log("✅ User profileCompleted updated to true");
+    } else {
+      console.warn("⚠️ User not found for username:", username);
+    }
+
+    res.status(201).json({
+      message: "Profile submitted successfully",
+      profileCompleted: true,
+    });
   } catch (error) {
+    console.error("❌ Profile creation error:", error);
     next(error);
   }
 });
