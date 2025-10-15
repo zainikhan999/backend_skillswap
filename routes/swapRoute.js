@@ -30,6 +30,8 @@ router.post("/swap-request", protect, swapRequest);
 router.get("/swaps", protect, getAllSwaps);
 router.put("/swap/:swapId/accept", protect, acceptSwap);
 // Complete swap route
+// router.put("/swaps/:swapId/complete", protect, completeSwap);
+
 router.put("/swaps/:swapId/complete", protect, completeSwap);
 router.get("/swaps/:swapId/status", protect, getSwapStatus);
 

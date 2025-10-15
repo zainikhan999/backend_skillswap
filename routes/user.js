@@ -30,6 +30,7 @@ import { getAllSwaps } from "../controllers/swapController.js";
 import { acceptSwap } from "../controllers/swapController.js";
 import { cancelSwap } from "../controllers/swapController.js";
 import { completeSwap } from "../controllers/swapController.js";
+import { syncSwapCounts } from "../controllers/swapCount.js";
 import {
   getReceivedSwapRequests,
   acceptSwapRequest,
@@ -72,7 +73,7 @@ app.delete("/delete-gig/:gigId", protect, deleteService);
 // Swap count routes
 app.post("/increment-swap-count", protect, swapCount);
 app.get("/get-swap-count/:username", protect, getSwapCount);
-
+app.post("/sync-swap-counts", protect, syncSwapCounts);
 // AI suggestion routes
 app.post("/suggest-bio", protect, suggestBio);
 
@@ -86,7 +87,8 @@ app.post("/swap-request", protect, swapRequest);
 app.get("/fetchswaps", protect, getAllSwaps);
 app.patch("/swaps/:swapId/accept", protect, acceptSwap);
 app.patch("/swaps/:swapId/cancel", protect, cancelSwap);
-app.patch("/swaps/:swapId/complete", protect, completeSwap);
+// app.patch("/swaps/:swapId/complete", protect, completeSwap);
+app.post("/swaps/:swapId/complete", protect, completeSwap);
 
 // Swap request routes
 app.get(

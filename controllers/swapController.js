@@ -15,14 +15,6 @@ export const acceptSwapRequest = TryCatch(async (req, res, next) => {
   // Get responder task details from frontend (swap form modal)
   const { taskName, timeRequired, description, deadline } = req.body;
 
-  console.log("User ID from auth:", userId.toString());
-  console.log("Responder task details:", {
-    taskName,
-    timeRequired,
-    description,
-    deadline,
-  });
-
   try {
     const swapRequest = await SwapDetails.findById(requestId);
 
@@ -36,21 +28,13 @@ export const acceptSwapRequest = TryCatch(async (req, res, next) => {
       req.user.username || req.user.userName || req.user.name;
     let responderId = swapRequest.responder.userId.toString();
 
-    console.log("Accept comparison:");
-    console.log("  Current user ID:", currentUserId);
-    console.log("  Current user username:", currentUserUsername);
-    console.log("  Responder:", responderId);
-
     let isResponder = false;
     if (responderId === currentUserId) {
       isResponder = true;
-      console.log("  Matched by user ID");
     } else if (currentUserUsername && responderId === currentUserUsername) {
       isResponder = true;
-      console.log("  Matched by username");
     } else {
       if (responderId && !responderId.match(/^[0-9a-fA-F]{24}$/)) {
-        console.log("  Responder appears to be username, checking database...");
         const responderUser = await User.findOne({
           $or: [
             { username: responderId },
@@ -60,7 +44,6 @@ export const acceptSwapRequest = TryCatch(async (req, res, next) => {
         });
         if (responderUser && responderUser._id.toString() === currentUserId) {
           isResponder = true;
-          console.log("  Responder matched via database lookup");
         }
       }
     }
@@ -164,8 +147,6 @@ export const getAllSwaps = TryCatch(async (req, res, next) => {
   })
     .populate("requester.userId", "userName profileImage firstName lastName")
     .populate("responder.userId", "userName profileImage firstName lastName");
-
-  console.log("Found swaps:", swaps.length);
 
   return res.status(200).json({
     message: "All swaps fetched successfully",
@@ -319,6 +300,7 @@ export const completeSwap = TryCatch(async (req, res, next) => {
     // Update completion status
     const updateFields = {};
     let statusMessage = "";
+    let bothCompleted = false;
 
     if (isRequester) {
       updateFields.requesterCompleted = true;
@@ -329,6 +311,7 @@ export const completeSwap = TryCatch(async (req, res, next) => {
         updateFields.status = "completed";
         updateFields.fullyCompletedAt = new Date();
         updateFields.closedAt = new Date();
+        bothCompleted = true;
         statusMessage = `🎉 Swap "${swap.requester.taskName} ↔ ${swap.responder.taskName}" has been FULLY COMPLETED! Chat is now closed.`;
       } else {
         // Only requester completed
@@ -344,6 +327,7 @@ export const completeSwap = TryCatch(async (req, res, next) => {
         updateFields.status = "completed";
         updateFields.fullyCompletedAt = new Date();
         updateFields.closedAt = new Date();
+        bothCompleted = true;
         statusMessage = `🎉 Swap "${swap.requester.taskName} ↔ ${swap.responder.taskName}" has been FULLY COMPLETED! Chat is now closed.`;
       } else {
         // Only responder completed
@@ -358,6 +342,23 @@ export const completeSwap = TryCatch(async (req, res, next) => {
       { $set: updateFields },
       { new: true }
     );
+
+    // ✅ INCREMENT SWAP COUNTS WHEN BOTH USERS COMPLETE
+    if (bothCompleted) {
+      console.log("🎉 Both users completed - incrementing swap counts!");
+
+      // Increment swap count for both users
+      await User.updateMany(
+        {
+          _id: {
+            $in: [swap.requester.userId._id, swap.responder.userId._id],
+          },
+        },
+        { $inc: { swapscount: 1 } }
+      );
+
+      console.log("✅ Swap counts incremented for both users");
+    }
 
     // Create system message
     const chatroomId = [
@@ -383,7 +384,7 @@ export const completeSwap = TryCatch(async (req, res, next) => {
     return res.status(200).json({
       message:
         updatedSwap.status === "completed"
-          ? "Swap fully completed! Chat is now closed."
+          ? "Swap fully completed! Swap counts updated."
           : "Your part marked complete. Waiting for other party.",
       swap: updatedSwap,
       bothCompleted: updatedSwap.status === "completed",
@@ -443,8 +444,6 @@ export const getReceivedSwapRequests = async (req, res) => {
   try {
     const { userId } = req.params;
 
-    console.log("Getting swap requests for userId:", userId);
-
     let actualUserId;
 
     // Check if userId is ObjectId or username
@@ -460,7 +459,6 @@ export const getReceivedSwapRequests = async (req, res) => {
       }
 
       actualUserId = user._id;
-      console.log("Converted username to ObjectId:", actualUserId.toString());
     }
 
     // Fetch swap requests + populate requester info
@@ -470,8 +468,6 @@ export const getReceivedSwapRequests = async (req, res) => {
     })
       .populate("requester.userId", "userName firstName lastName")
       .sort({ createdAt: -1 });
-
-    console.log("Requests found:", swapRequests.length);
 
     // Format for frontend
     const formattedRequests = swapRequests.map((swap) => ({
@@ -506,8 +502,6 @@ export const deleteSwapRequest = TryCatch(async (req, res, next) => {
   const { requestId } = req.params;
   const userId = req.user._id;
 
-  console.log("User ID from auth:", userId.toString());
-
   try {
     const swapRequest = await SwapDetails.findById(requestId);
 
@@ -522,22 +516,14 @@ export const deleteSwapRequest = TryCatch(async (req, res, next) => {
     const requesterId = swapRequest.requester.userId.toString();
     let responderId = swapRequest.responder.userId.toString();
 
-    console.log("Comparison values:");
-    console.log("  Current user ID:", currentUserId);
-    console.log("  Current user username:", currentUserUsername);
-    console.log("  Requester:", requesterId);
-    console.log("  Responder:", responderId);
-
     // Check if responder is stored as username instead of ObjectId
     let isResponder = false;
     if (responderId === currentUserId) {
       isResponder = true;
     } else if (currentUserUsername && responderId === currentUserUsername) {
       isResponder = true;
-      console.log("  Responder matched by username");
     } else {
       if (responderId && !responderId.match(/^[0-9a-fA-F]{24}$/)) {
-        console.log("  Responder appears to be username, checking database...");
         const responderUser = await User.findOne({
           $or: [
             { username: responderId },
@@ -547,15 +533,11 @@ export const deleteSwapRequest = TryCatch(async (req, res, next) => {
         });
         if (responderUser && responderUser._id.toString() === currentUserId) {
           isResponder = true;
-          console.log("  Responder matched via database lookup");
         }
       }
     }
 
     const isRequester = requesterId === currentUserId;
-
-    console.log("  Is requester?", isRequester);
-    console.log("  Is responder?", isResponder);
 
     // Check authorization - user must be either requester or responder
     if (!isRequester && !isResponder) {
@@ -606,11 +588,6 @@ export const swapRequest = TryCatch(async (req, res, next) => {
   const { recipient, taskName, description, timeRequired, deadline, taskId } =
     req.body;
 
-  console.log("Creating swap request:");
-  console.log("  Current user (requester):", currentUser.toString());
-  console.log("  Recipient (responder):", recipient);
-  console.log("  Recipient type:", typeof recipient);
-
   // Ensure recipient is converted to ObjectId if it's a string
   let recipientId;
   if (typeof recipient === "string" && recipient.match(/^[0-9a-fA-F]{24}$/)) {
@@ -624,8 +601,6 @@ export const swapRequest = TryCatch(async (req, res, next) => {
   } else {
     recipientId = recipient;
   }
-
-  console.log("  Final recipient ID:", recipientId.toString());
 
   // Check if a similar swap already exists
   const existingSwap = await SwapDetails.findOne({
@@ -696,11 +671,6 @@ export const swapRequestUpdated = TryCatch(async (req, res, next) => {
   const { recipient, taskName, description, timeRequired, deadline, taskId } =
     req.body;
 
-  console.log("Creating updated swap request:");
-  console.log("  Current user (requester):", currentUser.toString());
-  console.log("  Recipient (responder):", recipient);
-  console.log("  Recipient type:", typeof recipient);
-
   // Ensure recipient is converted to ObjectId if it's a string
   let recipientId;
   if (typeof recipient === "string" && recipient.match(/^[0-9a-fA-F]{24}$/)) {
@@ -714,8 +684,6 @@ export const swapRequestUpdated = TryCatch(async (req, res, next) => {
   } else {
     recipientId = recipient;
   }
-
-  console.log("  Final recipient ID:", recipientId.toString());
 
   // Check if a similar swap already exists
   const existingSwap = await SwapDetails.findOne({

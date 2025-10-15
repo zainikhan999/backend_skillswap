@@ -57,8 +57,6 @@ export const profile = TryCatch(async (req, res, next) => {
   // ✅ Use authenticated username from token
   const username = req.user.userName;
 
-  console.log("📝 Creating profile for user:", username);
-
   if (
     !name ||
     !city ||
@@ -94,14 +92,12 @@ export const profile = TryCatch(async (req, res, next) => {
     });
 
     await newProfile.save();
-    console.log("✅ Profile created in SkillForm collection");
 
     // ✅ CRITICAL: Update user's profileCompleted status
     const user = await skillswapuser.findOne({ userName: username });
     if (user) {
       user.profileCompleted = true;
       await user.save();
-      console.log("✅ User profileCompleted updated to true");
     } else {
       console.warn("⚠️ User not found for username:", username);
     }
