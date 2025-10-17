@@ -65,9 +65,21 @@ export const updateService = TryCatch(async (req, res, next) => {
       });
     }
 
+    // Validate category is not empty since it's required
+    if (!category || category.trim() === "") {
+      return res.status(400).json({
+        message: "Category is required and cannot be empty.",
+      });
+    }
+
     const updatedService = await Services.findByIdAndUpdate(
       id,
-      { skillName, skillDescription, exchangeService, category },
+      {
+        skillName,
+        skillDescription,
+        exchangeService,
+        category: category.trim(), // Trim whitespace
+      },
       { new: true, runValidators: true }
     );
 
