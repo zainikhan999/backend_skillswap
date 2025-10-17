@@ -47,3 +47,35 @@ export const myServices = TryCatch(async (req, res, next) => {
     next(error);
   }
 });
+
+export const updateService = TryCatch(async (req, res, next) => {
+  const { id } = req.params;
+  const { skillName, skillDescription, exchangeService, category } = req.body;
+
+  try {
+    const service = await Services.findById(id);
+
+    if (!service) {
+      return res.status(404).json({ message: "Service not found" });
+    }
+
+    if (req.user.userName.toLowerCase() !== service.username.toLowerCase()) {
+      return res.status(403).json({
+        message: "Access denied. You can only edit your own services.",
+      });
+    }
+
+    const updatedService = await Services.findByIdAndUpdate(
+      id,
+      { skillName, skillDescription, exchangeService, category },
+      { new: true, runValidators: true }
+    );
+
+    res.status(200).json({
+      message: "Service updated successfully!",
+      service: updatedService,
+    });
+  } catch (error) {
+    next(error);
+  }
+});

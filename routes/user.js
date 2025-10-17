@@ -43,6 +43,8 @@ import {
   resetPassword,
   resendOTP,
 } from "../controllers/authController.js";
+import { updateService } from "../controllers/uploadservice.js";
+
 const app = express.Router();
 
 // Auth routes
@@ -106,4 +108,6 @@ app.post("/resend-otp", resendOTP);
 app.post("/forgot-password", forgotPassword);
 app.post("/verify-reset-otp", verifyResetOTP);
 app.post("/reset-password", resetPassword);
+
+app.put("/update-gig/:id", protect, updateService);
 export default app;
