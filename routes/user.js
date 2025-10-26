@@ -44,7 +44,7 @@ import {
   resendOTP,
 } from "../controllers/authController.js";
 import { updateService } from "../controllers/uploadservice.js";
-
+import { getLeaderboard } from "../controllers/leaderboardController.js";
 const app = express.Router();
 
 // Auth routes
@@ -110,4 +110,7 @@ app.post("/verify-reset-otp", verifyResetOTP);
 app.post("/reset-password", resetPassword);
 
 app.put("/update-gig/:id", protect, updateService);
+
+//leaderboard route
+app.get("/leaderboard", protect, getLeaderboard);
 export default app;
